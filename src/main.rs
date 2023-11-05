@@ -1,7 +1,8 @@
 use actix_files::Files;
 use actix_web::error::{Error, ErrorInternalServerError};
+use actix_web::middleware::{Compress, Logger};
 use actix_web::web::{Data, Form};
-use actix_web::{get, middleware::Logger, post, App, HttpServer};
+use actix_web::{get, post, App, HttpServer};
 use askama::Template;
 use async_cron_scheduler::{Job, Scheduler};
 use env_logger::Env;
@@ -80,6 +81,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Logger::default())
             .wrap(Logger::new("%a %{User-Agent}i"))
+            .wrap(Compress::default())
             .app_data(Data::new(app_data.clone()))
             .service(index)
             .service(monitors_get)
