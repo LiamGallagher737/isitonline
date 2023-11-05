@@ -1,5 +1,3 @@
-<div id="monitors" hx-get="/monitors" hx-trigger="every 5s" hx-swap="outerHTML">
-  {% for MonitorTemplate { name, status } in monitors %}
-    {% include "monitor.html" %}
-  {% endfor %}
-</div>
+{% for MonitorTemplate { name, status } in monitors %}
+  {% include "monitor.html" %}
+{% endfor %}
