@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+
+<div id="monitors">
+  {% for name in monitors %}
+    {% include "monitor.html" %}
+  {% endfor %}
+</div>
+
+<form hx-post="/monitor" hx-target="#monitors" hx-swap="beforeend">
+  <input id="name" name="name" placeholder="Name" type="text" required />
+  <input id="target" name="target" placeholder="https://example.com" type="url" required />
+  <input id="cron" name="cron" placeholder="1/20 * * * * *" type="text" required />
+  <button type="submit">Submit</button>
+</form>
+
+{% endblock %}
