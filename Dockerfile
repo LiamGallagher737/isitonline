@@ -20,7 +20,7 @@ RUN strip target/release/isitonline
 
 FROM alpine:3.18
 
-RUN apk add --no-cache libgcc
+RUN apk add --no-cache libgcc libressl-dev
 COPY --from=builder /app/target/release/isitonline .
 COPY --from=builder /app/db /db
 COPY ./static /static

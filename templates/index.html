@@ -5,7 +5,7 @@
 {% block content %}
 
 <div id="monitors">
-  {% for name in monitors %}
+  {% for MonitorTemplate { name, status } in monitors %}
     {% include "monitor.html" %}
   {% endfor %}
 </div>

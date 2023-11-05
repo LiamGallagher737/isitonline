@@ -1,3 +1,13 @@
 <div>
-  <p>{{ name }}</p>
+  <p>
+    {{ name }}
+    {% match status %}
+      {% when Status::Online %}
+        🟢 Online
+      {% when Status::Offline %}
+        🔴 Offline
+      {% when Status::Pending %}
+        🟠 Pending
+    {% endmatch %}
+  </p>
 </div>
