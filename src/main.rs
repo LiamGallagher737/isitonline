@@ -7,7 +7,7 @@ use askama::Template;
 use async_cron_scheduler::{Job, Scheduler};
 use env_logger::Env;
 use futures::lock::Mutex;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::net::{IpAddr, Ipv4Addr};
@@ -59,7 +59,7 @@ async fn main() -> std::io::Result<()> {
         let http_client = http_client.clone();
         let pool = pool.clone();
         scheduler.insert(Job::cron(&monitor.cron).unwrap(), move |_| {
-            info!("Checking {} at {}", monitor.name, monitor.target);
+            // info!("Checking {} at {}", monitor.name, monitor.target);
             actix_web::rt::spawn(update_monitor(
                 monitor.monitor_id,
                 monitor.target.clone(),
@@ -108,9 +108,9 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     )
     .execute(&pool)
     .await;
-    info!("{target} is {}", if success { "online" } else { "offline" });
-    if insertion.is_err() {
-        error!("Failed to insert check into database for {target}");
+    // info!("{target} is {}", if success { "online" } else { "offline" });
+    if let Err(err) = insertion {
+        error!("Failed to insert check into database for {target}. Error: {err}");
     }
 }
 
@@ -191,7 +191,7 @@ async fn monitor_post(
         .lock()
         .await
         .insert(Job::cron(&params.cron).unwrap(), move |_| {
-            info!("Checking {} at {}", params.name, params.target);
+            // info!("Checking {} at {}", params.name, params.target);
             actix_web::rt::spawn(update_monitor(
                 row.monitor_id,
                 params.target.clone(),

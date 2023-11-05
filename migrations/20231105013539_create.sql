@@ -16,13 +16,15 @@ CREATE TABLE checks(
        REFERENCES monitors (monitor_id)
 );
 
+CREATE INDEX idx_checks_monitor_id_timestamp ON checks(monitor_id, timestamp);
+
 CREATE TABLE changes(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     success BOOLEAN NOT NULL,
     monitor_id INTEGER NOT NULL,
     FOREIGN KEY (monitor_id)
        REFERENCES monitors (monitor_id)
-)
+);
 
 CREATE TABLE archive(
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -30,4 +32,4 @@ CREATE TABLE archive(
     monitor_id INTEGER NOT NULL,
     FOREIGN KEY (monitor_id)
        REFERENCES monitors (monitor_id)
-)
+);
