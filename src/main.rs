@@ -82,6 +82,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::new("%a %{User-Agent}i"))
             .app_data(Data::new(app_data.clone()))
             .service(index)
+            .service(monitors_get)
             .service(monitor_post)
             .service(Files::new("/static", "./static"))
     })
@@ -111,39 +112,44 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     }
 }
 
-#[get("/")]
-async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
-    let monitors = sqlx::query!(
+async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::Error> {
+    sqlx::query!(
         r#"
         SELECT
         m.name,
-        (
+        IFNULL((
             SELECT success
             FROM checks c
             WHERE c.monitor_id = m.monitor_id
             ORDER BY timestamp DESC
             LIMIT 1
-        ) AS online
+        ), 2) status
         FROM monitors m
     "#
     )
-    .fetch_all(&data.pool)
+    .fetch_all(pool)
     .await
-    .map_err(ErrorInternalServerError)?;
-
-    Ok(IndexTemplate {
-        monitors: monitors
-            .iter()
+    .map(|rows| {
+        rows.iter()
             .map(|row| MonitorTemplate {
                 name: row.name.clone(),
-                status: if row.online {
-                    Status::Online
-                } else {
-                    Status::Offline
+                status: match row.status.unwrap() {
+                    0 => Status::Offline,
+                    1 => Status::Online,
+                    2 => Status::Pending,
+                    _ => unreachable!(),
                 },
             })
-            .collect(),
+            .collect()
     })
+}
+
+#[get("/")]
+async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
+    let monitors = get_monitors(&data.pool)
+        .await
+        .map_err(ErrorInternalServerError)?;
+    Ok(IndexTemplate { monitors })
 }
 
 #[derive(Deserialize)]
@@ -151,6 +157,14 @@ struct MonitorPostParams {
     name: String,
     target: String,
     cron: String,
+}
+
+#[get("/monitors")]
+async fn monitors_get(data: Data<AppData>) -> Result<MonitorsTemplate, Error> {
+    let monitors = get_monitors(&data.pool)
+        .await
+        .map_err(ErrorInternalServerError)?;
+    Ok(MonitorsTemplate { monitors })
 }
 
 #[post("/monitor")]
@@ -193,6 +207,12 @@ async fn monitor_post(
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
+    monitors: Vec<MonitorTemplate>,
+}
+
+#[derive(Template)]
+#[template(path = "monitors.html")]
+struct MonitorsTemplate {
     monitors: Vec<MonitorTemplate>,
 }
 

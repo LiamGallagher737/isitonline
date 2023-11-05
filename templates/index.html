@@ -4,11 +4,7 @@
 
 {% block content %}
 
-<div id="monitors">
-  {% for MonitorTemplate { name, status } in monitors %}
-    {% include "monitor.html" %}
-  {% endfor %}
-</div>
+{% include "monitors.html" %}
 
 <form hx-post="/monitor" hx-target="#monitors" hx-swap="beforeend">
   <input id="name" name="name" placeholder="Name" type="text" required />
