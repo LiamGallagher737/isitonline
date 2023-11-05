@@ -7,7 +7,7 @@ use askama::Template;
 use async_cron_scheduler::{Job, Scheduler};
 use env_logger::Env;
 use futures::lock::Mutex;
-use log::{error, info, warn};
+use log::{error, info};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::net::{IpAddr, Ipv4Addr};
@@ -118,14 +118,19 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
     sqlx::query!(
         r#"
         SELECT
-        m.name,
-        IFNULL((
-            SELECT success
-            FROM checks c
-            WHERE c.monitor_id = m.monitor_id
-            ORDER BY timestamp DESC
-            LIMIT 1
-        ), 2) status
+            m.name,
+            IFNULL((
+                SELECT success 
+                FROM checks c
+                WHERE c.monitor_id = m.monitor_id
+                ORDER BY c.timestamp DESC
+                LIMIT 1
+            ), 2) status,
+            (
+                SELECT MAX(timestamp) 
+                FROM checks c
+                WHERE c.monitor_id = m.monitor_id
+            ) timestamp
         FROM monitors m
     "#
     )
@@ -135,12 +140,13 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
         rows.iter()
             .map(|row| MonitorTemplate {
                 name: row.name.clone(),
-                status: match row.status.unwrap() {
-                    0 => Status::Offline,
-                    1 => Status::Online,
-                    2 => Status::Pending,
+                status: match row.status {
+                    Some(0) => Status::Offline,
+                    Some(1) => Status::Online,
+                    Some(2) => Status::Pending,
                     _ => unreachable!(),
                 },
+                timestamp: row.timestamp.clone(),
             })
             .collect()
     })
@@ -203,6 +209,7 @@ async fn monitor_post(
     Ok(MonitorTemplate {
         name,
         status: Status::Pending,
+        timestamp: None,
     })
 }
 
@@ -223,6 +230,7 @@ struct MonitorsTemplate {
 struct MonitorTemplate {
     name: String,
     status: Status,
+    timestamp: Option<String>,
 }
 
 enum Status {

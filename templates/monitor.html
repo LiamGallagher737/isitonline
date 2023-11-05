@@ -1,6 +1,7 @@
 <div>
   <p>
     {{ name }}
+    -
     {% match status %}
       {% when Status::Online %}
         🟢 Online
@@ -8,6 +9,13 @@
         🔴 Offline
       {% when Status::Pending %}
         🟠 Pending
+    {% endmatch %}
+    -
+    {% match timestamp %}
+      {% when Some with (val) %}
+        {{ val }}
+      {% when None %}
+        Pending...
     {% endmatch %}
   </p>
 </div>
