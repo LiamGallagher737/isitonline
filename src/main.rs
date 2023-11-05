@@ -23,14 +23,9 @@ async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(Env::default().default_filter_or("info"));
 
     info!("Connecting to db");
-    let pool = SqlitePool::connect("sqlite:data.db")
+    let pool = SqlitePool::connect("sqlite:db/data.db")
         .await
         .expect("Failed to connect to db");
-
-    sqlx::query_file!("src/tables.sql")
-        .execute(&pool)
-        .await
-        .expect("Failed to setup tables");
 
     // Config
     let ip = if let Ok(var) = std::env::var("IP") {
@@ -60,7 +55,7 @@ async fn main() -> std::io::Result<()> {
         });
     }
 
-    info!("Serving on {ip}:{port}");
+    info!("Serving on http://{ip}:{port}");
 
     let app_data = AppData {
         pool: pool.clone(),
