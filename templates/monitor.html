@@ -1,4 +1,4 @@
-<div>
+<div id="monitor-{{ id }}">
   <p>
     {{ name }}
     -
@@ -18,4 +18,5 @@
         Pending...
     {% endmatch %}
   </p>
+  <button hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
 </div>

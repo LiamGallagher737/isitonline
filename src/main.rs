@@ -1,15 +1,16 @@
 use actix_files::Files;
 use actix_web::error::{Error, ErrorInternalServerError};
 use actix_web::middleware::{Compress, Logger};
-use actix_web::web::{Data, Form};
-use actix_web::{get, post, App, HttpServer};
+use actix_web::web::{Data, Form, Path};
+use actix_web::{delete, get, post, App, HttpServer};
 use askama::Template;
-use async_cron_scheduler::{Job, Scheduler};
+use async_cron_scheduler::{Job, JobId, Scheduler};
 use env_logger::Env;
 use futures::lock::Mutex;
 use log::{error, info};
 use serde::Deserialize;
 use sqlx::SqlitePool;
+use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ struct AppData {
     pool: SqlitePool,
     scheduler: Arc<Mutex<Scheduler<chrono::Local>>>,
     http_client: reqwest::Client,
+    job_ids: Arc<Mutex<BTreeMap<i64, JobId>>>,
 }
 
 #[actix_web::main]
@@ -55,10 +57,11 @@ async fn main() -> std::io::Result<()> {
     let http_client = reqwest::Client::new();
 
     info!("Scheduling {} existing monitors", monitors.len());
+    let mut job_ids = BTreeMap::new();
     for monitor in monitors {
         let http_client = http_client.clone();
         let pool = pool.clone();
-        scheduler.insert(Job::cron(&monitor.cron).unwrap(), move |_| {
+        let job_id = scheduler.insert(Job::cron(&monitor.cron).unwrap(), move |_| {
             // info!("Checking {} at {}", monitor.name, monitor.target);
             actix_web::rt::spawn(update_monitor(
                 monitor.monitor_id,
@@ -67,6 +70,7 @@ async fn main() -> std::io::Result<()> {
                 pool.clone(),
             ));
         });
+        job_ids.insert(monitor.monitor_id, job_id);
     }
 
     info!("Serving on http://{ip}:{port}");
@@ -75,17 +79,18 @@ async fn main() -> std::io::Result<()> {
         pool: pool.clone(),
         scheduler: Arc::new(Mutex::new(scheduler)),
         http_client,
+        job_ids: Arc::new(Mutex::new(job_ids)),
     };
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
             .wrap(Logger::new("%a %{User-Agent}i"))
             .wrap(Compress::default())
             .app_data(Data::new(app_data.clone()))
             .service(index)
             .service(monitors_get)
             .service(monitor_post)
+            .service(monitor_delete)
             .service(Files::new("/static", "./static"))
     })
     .bind((ip, port))?
@@ -118,16 +123,17 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
     sqlx::query!(
         r#"
         SELECT
+            m.monitor_id,
             m.name,
             IFNULL((
-                SELECT success 
+                SELECT success
                 FROM checks c
                 WHERE c.monitor_id = m.monitor_id
                 ORDER BY c.timestamp DESC
                 LIMIT 1
             ), 2) status,
             (
-                SELECT MAX(timestamp) 
+                SELECT MAX(timestamp)
                 FROM checks c
                 WHERE c.monitor_id = m.monitor_id
             ) timestamp
@@ -139,6 +145,7 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
     .map(|rows| {
         rows.iter()
             .map(|row| MonitorTemplate {
+                id: row.monitor_id.unwrap(),
                 name: row.name.clone(),
                 status: match row.status {
                     Some(0) => Status::Offline,
@@ -160,19 +167,19 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
     Ok(IndexTemplate { monitors })
 }
 
-#[derive(Deserialize)]
-struct MonitorPostParams {
-    name: String,
-    target: String,
-    cron: String,
-}
-
 #[get("/monitors")]
 async fn monitors_get(data: Data<AppData>) -> Result<MonitorsTemplate, Error> {
     let monitors = get_monitors(&data.pool)
         .await
         .map_err(ErrorInternalServerError)?;
     Ok(MonitorsTemplate { monitors })
+}
+
+#[derive(Deserialize)]
+struct MonitorPostParams {
+    name: String,
+    target: String,
+    cron: String,
 }
 
 #[post("/monitor")]
@@ -193,7 +200,8 @@ async fn monitor_post(
     let name = params.name.clone();
     let http_client = data.http_client.clone();
     let pool = data.pool.clone();
-    data.scheduler
+    let job_id = data
+        .scheduler
         .lock()
         .await
         .insert(Job::cron(&params.cron).unwrap(), move |_| {
@@ -205,12 +213,37 @@ async fn monitor_post(
                 pool.clone(),
             ));
         });
+    data.job_ids.lock().await.insert(row.monitor_id, job_id);
 
     Ok(MonitorTemplate {
+        id: row.monitor_id,
         name,
         status: Status::Pending,
         timestamp: None,
     })
+}
+
+#[delete("/monitor/{id}")]
+async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static str, Error> {
+    let id = path.into_inner();
+    sqlx::query!(
+        r#"
+        BEGIN TRANSACTION;
+        DELETE FROM checks WHERE monitor_id = ?;
+        DELETE FROM monitors WHERE monitor_id = ?;
+        COMMIT;
+    "#,
+        id,
+        id
+    )
+    .execute(&data.pool)
+    .await
+    .map_err(ErrorInternalServerError)?;
+    data.scheduler
+        .lock()
+        .await
+        .remove(data.job_ids.lock().await.remove(&id).unwrap());
+    Ok("Success")
 }
 
 #[derive(Template)]
@@ -228,6 +261,7 @@ struct MonitorsTemplate {
 #[derive(Template)]
 #[template(path = "monitor.html")]
 struct MonitorTemplate {
+    id: i64,
     name: String,
     status: Status,
     timestamp: Option<String>,

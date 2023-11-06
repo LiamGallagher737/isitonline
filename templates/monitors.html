@@ -1,3 +1,3 @@
-{% for MonitorTemplate { name, status, timestamp } in monitors %}
+{% for MonitorTemplate { id, name, status, timestamp } in monitors %}
   {% include "monitor.html" %}
 {% endfor %}
