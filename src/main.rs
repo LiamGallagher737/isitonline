@@ -5,6 +5,7 @@ use actix_web::web::{Data, Form, Path};
 use actix_web::{delete, get, post, App, HttpServer};
 use askama::Template;
 use async_cron_scheduler::{Job, JobId, Scheduler};
+use chrono::{TimeZone, Utc};
 use env_logger::Env;
 use futures::lock::Mutex;
 use log::{error, info};
@@ -136,10 +137,10 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
                 LIMIT 1
             ), 2) "status: i64",
             (
-                SELECT MAX(timestamp)
+                SELECT unixepoch(MAX(timestamp))
                 FROM checks c
                 WHERE c.monitor_id = m.monitor_id
-            ) "timestamp: String"
+            ) "timestamp: i64"
         FROM monitors m
     "#
     )
@@ -156,10 +157,16 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
                     Some(2) => Status::Pending,
                     _ => unreachable!(),
                 },
-                timestamp: row.timestamp.clone(),
+                timestamp: Some(format_timestamp(row.timestamp.unwrap())),
             })
             .collect()
     })
+}
+
+fn format_timestamp(timestamp: i64) -> String {
+    let utc = Utc.timestamp_opt(timestamp, 0).unwrap();
+    let local = utc.with_timezone(&chrono::Local);
+    local.format("%b, %d %Y • %H:%M:%S").to_string()
 }
 
 #[get("/")]

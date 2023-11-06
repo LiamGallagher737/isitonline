@@ -4,9 +4,19 @@
 
 {% block content %}
 
-<div id="monitors" hx-get="/monitors" hx-trigger="every 5s">
-  {% include "monitors.html" %}
-</div>
+<table class="table-auto w-[500px]">
+  <thead>
+    <tr>
+      <th>Monitor</th>
+      <th>Status</th>
+      <th>Last Check</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="monitors" hx-get="/monitors" hx-trigger="every 5s">
+    {% include "monitors.html" %}
+  </tbody>
+</table>
 
 <form hx-post="/monitor" hx-target="#monitors" hx-swap="beforeend">
   <input id="name" name="name" placeholder="Name" type="text" required />
