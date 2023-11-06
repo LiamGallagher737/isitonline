@@ -8,7 +8,30 @@ A self-hosted web app for monitoring your services
 
 ## Installation
 
-### Docker
+### Docker Compose
+
+The easist way to host this yourself is with docker compose.
+
+> [!NOTE]  
+> As this is still in development, no docker images have been published yet. You will have to build the image youself.
+
+**Example `Docker-Compose.yml`**
+
+```yml
+version: '3.1'
+services:
+  isitonline:
+    image: isitonline
+    environment:
+      POSTGRES_PASSWORD: example
+    ports:
+      - 8080:8080
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:
+```
 
 ### Windows
 
