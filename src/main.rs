@@ -54,7 +54,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to fetch existing monitors");
 
-    let http_client = reqwest::Client::new();
+    let http_client = reqwest::ClientBuilder::new()
+        .user_agent("https://github.com/LiamGallagher737/isitonline")
+        .build()
+        .unwrap();
 
     info!("Scheduling {} existing monitors", monitors.len());
     let mut job_ids = BTreeMap::new();
@@ -131,12 +134,12 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
                 WHERE c.monitor_id = m.monitor_id
                 ORDER BY c.timestamp DESC
                 LIMIT 1
-            ), 2) status,
+            ), 2) "status: i64",
             (
                 SELECT MAX(timestamp)
                 FROM checks c
                 WHERE c.monitor_id = m.monitor_id
-            ) timestamp
+            ) "timestamp: String"
         FROM monitors m
     "#
     )
@@ -268,7 +271,7 @@ struct MonitorTemplate {
 }
 
 enum Status {
-    Online,
     Offline,
+    Online,
     Pending,
 }
