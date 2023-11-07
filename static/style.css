@@ -1,0 +1,69 @@
+html {
+  font-family: "Inter", sans-serif;
+}
+
+svg {
+  display: block;
+}
+
+#stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-card {
+  border-style: solid;
+  border-width: 1px;
+  border-color: #d1d5db;
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+}
+
+.stat-card p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.stat-card .stat-card-content {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  align-items: center;
+}
+
+.stat-card .stat-card-icon {
+  padding: 0.75rem;
+  border-radius: 9999px;
+  background-color: var(--_secondary-color);
+  fill: var(--_primary-color);
+}
+
+.stat-card .stat-card-content span {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.start-card-red {
+  --_secondary-color: #fecaca;
+  --_primary-color: #ef4444;
+}
+
+.start-card-orange {
+  --_secondary-color: #fed7aa;
+  --_primary-color: #f97316;
+}
+
+.start-card-green {
+  --_secondary-color: #bbf7d0;
+  --_primary-color: #22c55e;
+}
+
+.start-card-blue {
+  --_secondary-color: #bfdbfe;
+  --_primary-color: #3b82f6;
+}

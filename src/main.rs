@@ -175,11 +175,17 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
         .await
         .map_err(ErrorInternalServerError)?;
     Ok(IndexTemplate {
-        monitors,
-        online_monitors: 5,
-        offline_monitors: 0,
-        warnings: 0,
+        online_monitors: monitors
+            .iter()
+            .filter(|monitor| monitor.status == Status::Online)
+            .count(),
+        offline_monitors: monitors
+            .iter()
+            .filter(|monitor| monitor.status == Status::Offline)
+            .count(),
+        warnings: 404,
         average_uptime: format!("{:.1}", 98.363),
+        monitors,
     })
 }
 
@@ -266,9 +272,9 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
 #[template(path = "index.html")]
 struct IndexTemplate {
     monitors: Vec<MonitorTemplate>,
-    online_monitors: u32,
-    offline_monitors: u32,
-    warnings: u32,
+    online_monitors: usize,
+    offline_monitors: usize,
+    warnings: usize,
     average_uptime: String,
 }
 
@@ -287,6 +293,7 @@ struct MonitorTemplate {
     timestamp: Option<String>,
 }
 
+#[derive(PartialEq)]
 enum Status {
     Offline,
     Online,
