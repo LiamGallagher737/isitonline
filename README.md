@@ -27,7 +27,7 @@ services:
     ports:
       - 8080:8080
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/db
 
 volumes:
   db_data:
