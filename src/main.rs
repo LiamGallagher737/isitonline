@@ -174,7 +174,13 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
     let monitors = get_monitors(&data.pool)
         .await
         .map_err(ErrorInternalServerError)?;
-    Ok(IndexTemplate { monitors })
+    Ok(IndexTemplate {
+        monitors,
+        online_monitors: 5,
+        offline_monitors: 0,
+        warnings: 0,
+        average_uptime: format!("{:.1}", 98.363),
+    })
 }
 
 #[get("/monitors")]
@@ -260,6 +266,10 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
 #[template(path = "index.html")]
 struct IndexTemplate {
     monitors: Vec<MonitorTemplate>,
+    online_monitors: u32,
+    offline_monitors: u32,
+    warnings: u32,
+    average_uptime: String,
 }
 
 #[derive(Template)]

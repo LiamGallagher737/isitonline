@@ -54,3 +54,7 @@ You can then run the app with `cargo r` and it should appear at http://127.0.0.1
 **Useful Tools**
 
 - [DB Browser for SQLite](https://sqlitebrowser.org/) has been really useful durning development for viewing the database in an easy to use gui, you can download it from their [GitHub releases](https://github.com/sqlitebrowser/sqlitebrowser/releases)
+
+## Credits
+
+A lot of the design is based of [this design by Fireart Studio](https://dribbble.com/shots/16937445-Uptime-Monitoring-Service-Dashboard/attachments/12008723?mode=media).

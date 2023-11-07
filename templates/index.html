@@ -4,13 +4,52 @@
 
 {% block content %}
 
-<table class="table-auto w-[500px]">
-  <thead>
+<section id="stats" class="grid gap-4 grid-cols-1 min-[550px]:grid-cols-2 lg:grid-cols-4">
+  <div class="border rounded-3xl p-6">
+    <p class="mb-2 text-gray-500 text-sm">Online Monitors</p>
+    <div class="flex flex-row gap-4 items-center">
+      <div class="p-3 bg-green-200 fill-green-500 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 -960 960 960" width="28"><path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/></svg>
+      </div>
+      <span class="text-3xl font-semibold">{{ online_monitors }}</span>
+    </div>
+  </div>
+  <div class="border rounded-3xl p-6">
+    <p class="mb-2 text-gray-500 text-sm">Offline Monitors</p>
+    <div class="flex flex-row gap-4 items-center">
+      <div class="p-3 bg-red-200 fill-red-500 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 -960 960 960" width="28"><path d="M330-120 120-330v-300l210-210h300l210 210v300L630-120H330Zm36-190 114-114 114 114 56-56-114-114 114-114-56-56-114 114-114-114-56 56 114 114-114 114 56 56Zm-2 110h232l164-164v-232L596-760H364L200-596v232l164 164Zm116-280Z"/></svg>
+      </div>
+      <span class="text-3xl font-semibold">{{ offline_monitors }}</span>
+    </div>
+  </div>
+  <div class="border rounded-3xl p-6">
+    <p class="mb-2 text-gray-500 text-sm">Warnings</p>
+    <div class="flex flex-row gap-4 items-center">
+      <div class="p-3 bg-orange-200 fill-orange-500 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 -960 960 960" width="28"><path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"/></svg>
+      </div>
+      <span class="text-3xl font-semibold">{{ warnings }}</span>
+    </div>
+  </div>
+  <div class="border rounded-3xl p-6">
+    <p class="mb-2 text-gray-500 text-sm">Average Uptime</p>
+    <div class="flex flex-row gap-4 items-center">
+      <div class="p-3 bg-green-200 fill-green-500 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 -960 960 960" width="28"><path d="M440-160v-487L216-423l-56-57 320-320 320 320-56 57-224-224v487h-80Z"/></svg>
+      </div>
+      <span class="text-3xl font-semibold">{{ average_uptime }}%</span>
+    </div>
+  </div>
+</section>
+
+<table class="table-auto w-[700px] text-sm text-left text-gray-700">
+  <thead class="text-md text-gray-900 bg-gray-50">
     <tr>
-      <th>Monitor</th>
-      <th>Status</th>
-      <th>Last Check</th>
-      <th></th>
+      <th scope="col" class="px-6 py-3">Monitor</th>
+      <th scope="col" class="px-6 py-3">Status</th>
+      <th scope="col" class="px-6 py-3">Last Check</th>
+      <th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>
     </tr>
   </thead>
   <tbody id="monitors" hx-get="/monitors" hx-trigger="every 5s">

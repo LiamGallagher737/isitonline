@@ -1,19 +1,19 @@
-<tr id="monitor-{{ id }}">
-  <td>{{ name }}</td>
-  <td>
+<tr id="monitor-{{ id }}" class="bg-white border-b">
+  <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{{ name }}</th>
+  <td class="px-6 py-4">
     {% match status %}
       {% when Status::Online %} 🟢 Online
       {% when Status::Offline %} 🔴 Offline
       {% when Status::Pending %} 🟠 Pending
     {% endmatch %}
   </td>
-  <td>
+  <td class="px-6 py-4">
     {% match timestamp %}
       {% when Some with (val) %} {{ val }}
       {% when None %} Pending...
     {% endmatch %}
   </td>
-  <td>
+  <td class="px-6 py-4">
     <button class="w-2" hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
   </td>
 </tr>
