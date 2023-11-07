@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 actix-web = "4.4"
 actix-files = "0.6"
-sqlx = { version = "0.7", features = ["sqlite", "runtime-async-std"] }
+sqlx = { version = "0.7", features = ["sqlite", "runtime-async-std", "chrono"] }
 askama = { version = "0.12", features = ["with-actix-web"] }
 askama_actix = "0.14"
 serde = { version = "1.0.190", features = ["derive"] }

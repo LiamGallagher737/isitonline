@@ -1,0 +1,11 @@
+<div class="issue-card">
+    <p class="issue-card-name">{{ name }}</p>
+    <p class="issue-card-target">{{ target }}</p>
+    <p class="http-code http-code-red">
+        {% match http_code %}
+            {% when Some with (code) %} {{ code }}
+            {% when None %} Fail
+        {% endmatch %}
+    </p>
+    <p class="issue-card-timestamp">{{ timestamp }}</p>
+</div>

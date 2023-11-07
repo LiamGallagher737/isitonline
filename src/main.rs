@@ -106,10 +106,51 @@ async fn main() -> std::io::Result<()> {
 
 async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, pool: SqlitePool) {
     let res = http_client.get(&target).send().await;
-    let success = match res {
+    let success = match res.as_ref() {
         Ok(res) => !res.status().is_client_error() && !res.status().is_server_error(),
         Err(_) => false,
     };
+
+    let last_change =
+        sqlx::query!("SELECT success, http_code FROM changes WHERE monitor_id = ? ORDER BY timestamp DESC LIMIT 1", id)
+            .fetch_optional(&pool)
+            .await;
+
+    let http_code = res.map(|res| res.status().as_u16() as i64).ok();
+    let insert_change = match last_change.as_ref() {
+        Ok(None) => true,
+        Ok(Some(last_change)) if last_change.success != success => true,
+        Ok(Some(last_change)) if last_change.http_code != http_code => true,
+        Err(err) => {
+            error!("Failed to select last change for {target}. Error: {err}");
+            false
+        }
+        _ => false,
+    };
+
+    if insert_change {
+        println!(
+            "{:?} -> {:?} - {target}",
+            last_change.map(|r| r.map(|r| r.http_code)),
+            &http_code
+        );
+    }
+
+    if insert_change {
+        let insertion = sqlx::query!(
+            "INSERT INTO changes (success, http_code, monitor_id) VALUES (?,?,?)",
+            success,
+            http_code,
+            id
+        )
+        .execute(&pool)
+        .await;
+
+        if let Err(err) = insertion {
+            error!("Failed to insert change into database for {target}. Error: {err}");
+        }
+    }
+
     let insertion = sqlx::query!(
         "INSERT INTO checks (success, monitor_id) VALUES (?, ?)",
         success,
@@ -117,7 +158,7 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     )
     .execute(&pool)
     .await;
-    // info!("{target} is {}", if success { "online" } else { "offline" });
+
     if let Err(err) = insertion {
         error!("Failed to insert check into database for {target}. Error: {err}");
     }
@@ -174,6 +215,25 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
     let monitors = get_monitors(&data.pool)
         .await
         .map_err(ErrorInternalServerError)?;
+
+    let mut issues = sqlx::query!(
+        r#"
+        SELECT c.*, m.name, m.target
+        FROM changes c
+        JOIN monitors m ON c.monitor_id = m.monitor_id
+        WHERE c.success = 0
+        AND c.timestamp = (
+            SELECT MAX(timestamp)
+            FROM changes
+            WHERE monitor_id = c.monitor_id
+        );
+    "#
+    )
+    .fetch_all(&data.pool)
+    .await
+    .map_err(ErrorInternalServerError)?;
+    issues.sort_by(|row_a, row_b| row_b.timestamp.unwrap().cmp(&row_a.timestamp.unwrap()));
+
     Ok(IndexTemplate {
         online_monitors: monitors
             .iter()
@@ -186,6 +246,22 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
         warnings: 404,
         average_uptime: format!("{:.1}", 98.363),
         monitors,
+        issues: issues
+            .iter()
+            .map(|row| IssueTemplate {
+                timestamp: row
+                    .timestamp
+                    .unwrap()
+                    .and_utc()
+                    .with_timezone(&chrono::Local)
+                    .format("%b, %d %Y • %I:%M:%S %p")
+                    .to_string(),
+                success: row.success,
+                http_code: row.http_code.map(|code| code as u16),
+                name: row.name.clone(),
+                target: row.target.clone(),
+            })
+            .collect(),
     })
 }
 
@@ -271,11 +347,12 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
-    monitors: Vec<MonitorTemplate>,
     online_monitors: usize,
     offline_monitors: usize,
     warnings: usize,
     average_uptime: String,
+    monitors: Vec<MonitorTemplate>,
+    issues: Vec<IssueTemplate>,
 }
 
 #[derive(Template)]
@@ -291,6 +368,16 @@ struct MonitorTemplate {
     name: String,
     status: Status,
     timestamp: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "issue.html")]
+struct IssueTemplate {
+    timestamp: String,
+    success: bool,
+    http_code: Option<u16>,
+    name: String,
+    target: String,
 }
 
 #[derive(PartialEq)]
