@@ -50,7 +50,7 @@ async fn main() -> std::io::Result<()> {
     let (mut scheduler, sched_service) =
         Scheduler::<chrono::Local>::launch(actix_web::rt::time::sleep);
 
-    let monitors = sqlx::query!("SELECT monitor_id, name, target, cron FROM monitors")
+    let monitors = sqlx::query!("SELECT id, name, target, cron FROM monitors")
         .fetch_all(&pool)
         .await
         .expect("Failed to fetch existing monitors");
@@ -68,13 +68,13 @@ async fn main() -> std::io::Result<()> {
         let job_id = scheduler.insert(Job::cron(&monitor.cron).unwrap(), move |_| {
             // info!("Checking {} at {}", monitor.name, monitor.target);
             actix_web::rt::spawn(update_monitor(
-                monitor.monitor_id,
+                monitor.id,
                 monitor.target.clone(),
                 http_client.clone(),
                 pool.clone(),
             ));
         });
-        job_ids.insert(monitor.monitor_id, job_id);
+        job_ids.insert(monitor.id, job_id);
     }
 
     info!("Serving on http://{ip}:{port}");
@@ -168,19 +168,19 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
     sqlx::query!(
         r#"
         SELECT
-            m.monitor_id,
+            m.id,
             m.name,
             IFNULL((
                 SELECT success
                 FROM checks c
-                WHERE c.monitor_id = m.monitor_id
+                WHERE c.monitor_id = m.id
                 ORDER BY c.timestamp DESC
                 LIMIT 1
             ), 2) "status: i64",
             (
                 SELECT unixepoch(MAX(timestamp))
                 FROM checks c
-                WHERE c.monitor_id = m.monitor_id
+                WHERE c.monitor_id = m.id
             ) "timestamp: i64"
         FROM monitors m
     "#
@@ -190,7 +190,7 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
     .map(|rows| {
         rows.iter()
             .map(|row| MonitorTemplate {
-                id: row.monitor_id.unwrap(),
+                id: row.id.unwrap(),
                 name: row.name.clone(),
                 status: match row.status {
                     Some(0) => Status::Offline,
@@ -220,7 +220,7 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
         r#"
         SELECT c.*, m.name, m.target
         FROM changes c
-        JOIN monitors m ON c.monitor_id = m.monitor_id
+        JOIN monitors m ON c.monitor_id = m.id
         WHERE c.success = 0
         AND c.timestamp = (
             SELECT MAX(timestamp)
@@ -232,7 +232,7 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
     .fetch_all(&data.pool)
     .await
     .map_err(ErrorInternalServerError)?;
-    issues.sort_by(|row_a, row_b| row_b.timestamp.unwrap().cmp(&row_a.timestamp.unwrap()));
+    issues.sort_by(|row_a, row_b| row_b.timestamp.cmp(&row_a.timestamp));
 
     Ok(IndexTemplate {
         online_monitors: monitors
@@ -251,7 +251,6 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
             .map(|row| IssueTemplate {
                 timestamp: row
                     .timestamp
-                    .unwrap()
                     .and_utc()
                     .with_timezone(&chrono::Local)
                     .format("%b, %d %Y • %I:%M:%S %p")
@@ -286,7 +285,7 @@ async fn monitor_post(
     params: Form<MonitorPostParams>,
 ) -> Result<MonitorTemplate, Error> {
     let row = sqlx::query!(
-        "INSERT INTO monitors (name, target, cron) VALUES(?, ?, ?) RETURNING monitor_id",
+        "INSERT INTO monitors (name, target, cron) VALUES(?, ?, ?) RETURNING id",
         params.name,
         params.target,
         params.cron,
@@ -305,16 +304,16 @@ async fn monitor_post(
         .insert(Job::cron(&params.cron).unwrap(), move |_| {
             // info!("Checking {} at {}", params.name, params.target);
             actix_web::rt::spawn(update_monitor(
-                row.monitor_id,
+                row.id,
                 params.target.clone(),
                 http_client.clone(),
                 pool.clone(),
             ));
         });
-    data.job_ids.lock().await.insert(row.monitor_id, job_id);
+    data.job_ids.lock().await.insert(row.id, job_id);
 
     Ok(MonitorTemplate {
-        id: row.monitor_id,
+        id: row.id,
         name,
         status: Status::Pending,
         timestamp: None,
@@ -328,7 +327,7 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
         r#"
         BEGIN TRANSACTION;
         DELETE FROM checks WHERE monitor_id = ?;
-        DELETE FROM monitors WHERE monitor_id = ?;
+        DELETE FROM monitors WHERE id = ?;
         COMMIT;
     "#,
         id,
