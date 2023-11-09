@@ -2,15 +2,15 @@
   <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">{{ name }}</th>
   <td class="px-6 py-4">
     {% match status %}
-      {% when Status::Online %} 🟢 Online
-      {% when Status::Offline %} 🔴 Offline
-      {% when Status::Pending %} 🟠 Pending
+      {% when Status::Online %} Online
+      {% when Status::Offline %} Offline
+      {% when Status::Pending %} Pending
     {% endmatch %}
   </td>
   <td class="px-6 py-4">
     {% match timestamp %}
       {% when Some with (val) %} {{ val }}
-      {% when None %} Pending...
+      {% when None %} Not checked yet
     {% endmatch %}
   </td>
   <td class="px-6 py-4">

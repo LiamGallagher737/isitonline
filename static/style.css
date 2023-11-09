@@ -159,6 +159,44 @@ header .settings svg {
   margin-top: 0.5rem;
 }
 
+/* Monitors */
+
+#monitors table {
+  border-style: solid;
+  border-width: 1px;
+  border-color: #d1d5db;
+  border-radius: 1.5rem;
+  padding: 0 1.5rem;
+  width: 100%;
+}
+
+#monitors thead {
+  height: 3rem;
+  line-height: 3rem;
+}
+
+#monitors thead th {
+  font-weight: 400;
+  border-bottom: #d1d5db;
+  border-bottom-width: 1px;
+  border-style: solid;
+}
+
+#monitors tbody th,
+#monitors tbody td {
+  border-bottom: #d1d5db;
+  border-bottom-width: 1px;
+  border-style: solid;
+  font-weight: 400;
+  height: 4rem;
+  line-height: 4rem;
+}
+
+#monitors tbody tr:last-child th,
+#monitors tbody tr:last-child td {
+  border: 0;
+}
+
 /* Reuseable */
 
 .http-code {

@@ -53,19 +53,17 @@
   </div>
 </section>
 
-<section id="issues">
-  <h2>Active Issues</h2>
+{% if issues.len() > 0 %}
+  <section id="issues">
+    <h2>Active Issues</h2>
 
-  <div class="issue-cards">
-    {% if issues.len() == 0 %}
-      No issues
-    {% else %}
+    <div class="issue-cards">
       {% for IssueTemplate { timestamp, success, http_code, name, target } in issues %}
         {% include "issue.html" %}
       {% endfor %}
-    {% endif %}
-  </div>
-</section>
+    </div>
+  </section>
+{% endif %}
 
 <section id="monitors">
   <h2>Monitors</h2>
@@ -73,18 +71,18 @@
   <table class="table-auto w-[700px] text-sm text-left text-gray-700">
     <thead class="text-md text-gray-900 bg-gray-50">
       <tr>
-        <th scope="col" class="px-6 py-3">Monitor</th>
-        <th scope="col" class="px-6 py-3">Status</th>
-        <th scope="col" class="px-6 py-3">Last Check</th>
-        <th scope="col" class="px-6 py-3"><span class="sr-only">Actions</span></th>
+        <th scope="col">Monitor</th>
+        <th scope="col">Status</th>
+        <th scope="col">Checked</th>
+        <th scope="col">Actions</th>
       </tr>
     </thead>
-    <tbody id="monitors" hx-get="/monitors" hx-trigger="every 5s">
+    <tbody id="monitors-table-body" hx-get="/monitors" hx-trigger="every 5s">
       {% include "monitors.html" %}
     </tbody>
   </table>
   
-  <form hx-post="/monitor" hx-target="#monitors" hx-swap="beforeend">
+  <form hx-post="/monitor" hx-target="#monitors-table-body" hx-swap="beforeend">
     <input id="name" name="name" placeholder="Name" type="text" required />
     <input id="target" name="target" placeholder="https://example.com" type="url" required />
     <input id="cron" name="cron" placeholder="1/20 * * * * *" type="text" required />

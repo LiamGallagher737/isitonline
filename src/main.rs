@@ -5,7 +5,7 @@ use actix_web::web::{Data, Form, Path};
 use actix_web::{delete, get, post, App, HttpServer};
 use askama::Template;
 use async_cron_scheduler::{Job, JobId, Scheduler};
-use chrono::{TimeZone, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 use env_logger::Env;
 use futures::lock::Mutex;
 use log::{error, info};
@@ -178,10 +178,10 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
                 LIMIT 1
             ), 2) "status: i64",
             (
-                SELECT unixepoch(MAX(timestamp))
+                SELECT MAX(timestamp)
                 FROM checks c
                 WHERE c.monitor_id = m.id
-            ) "timestamp: i64"
+            ) "timestamp: NaiveDateTime"
         FROM monitors m
     "#
     )
@@ -198,16 +198,30 @@ async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::E
                     Some(2) => Status::Pending,
                     _ => unreachable!(),
                 },
-                timestamp: Some(format_timestamp(row.timestamp.unwrap())),
+                timestamp: row
+                    .timestamp
+                    .map(|timestamp| format_duration(Utc::now() - timestamp.and_utc())),
             })
             .collect()
     })
 }
 
-fn format_timestamp(timestamp: i64) -> String {
-    let utc = Utc.timestamp_opt(timestamp, 0).unwrap();
-    let local = utc.with_timezone(&chrono::Local);
-    local.format("%b, %d %Y • %H:%M:%S").to_string()
+fn format_duration(duration: Duration) -> String {
+    if duration.num_seconds() == 0 {
+        String::from("Just now")
+    } else if duration.num_seconds() == 1 {
+        String::from("1 second ago")
+    } else if duration.num_seconds() < 60 {
+        format!("{} seconds ago", duration.num_seconds())
+    } else if duration.num_minutes() == 1 {
+        String::from("1 minute ago")
+    } else if duration.num_minutes() < 60 {
+        format!("{} minutes ago", duration.num_minutes())
+    } else if duration.num_days() == 1 {
+        String::from("yesterday")
+    } else {
+        format!("{} days ago", duration.num_days())
+    }
 }
 
 #[get("/")]
@@ -326,12 +340,14 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
     sqlx::query!(
         r#"
         BEGIN TRANSACTION;
+        DELETE FROM changes WHERE monitor_id = ?;
         DELETE FROM checks WHERE monitor_id = ?;
         DELETE FROM monitors WHERE id = ?;
         COMMIT;
     "#,
         id,
-        id
+        id,
+        id,
     )
     .execute(&data.pool)
     .await
@@ -339,7 +355,15 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
     data.scheduler
         .lock()
         .await
-        .remove(data.job_ids.lock().await.remove(&id).unwrap());
+        .remove(
+            data.job_ids
+                .lock()
+                .await
+                .remove(&id)
+                .ok_or(ErrorInternalServerError(
+                    "Failed to remove monitor job from schedule",
+                ))?,
+        );
     Ok("Success")
 }
 
