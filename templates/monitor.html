@@ -1,6 +1,6 @@
 <tr id="monitor-{{ id }}" class="bg-white border-b">
-  <th scope="row">{{ name }}</th>
-  <td>
+  <th scope="row" class="monitor-name">{{ name }}</th>
+  <td class="monitor-status">
     {% match status %}
       {% when Status::Online %} Online
       {% when Status::Offline %} Offline
@@ -11,19 +11,19 @@
       {% when None %}
     {% endmatch %}
   </td>
-  <td>
+  <td class="monitor-rt">
     {% match response_time %}
       {% when Some with (val) %} {{ val }}ms
       {% when None %} n/a
     {% endmatch %}
   </td>
-  <td>
+  <td class="monitor-last-check">
     {% match timestamp %}
       {% when Some with (val) %} {{ val }}
       {% when None %} Not checked yet
     {% endmatch %}
   </td>
-  <td>
-    <button class="w-2" hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
+  <td class="monitor-actions">
+    <button hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
   </td>
 </tr>

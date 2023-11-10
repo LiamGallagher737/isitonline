@@ -8,13 +8,17 @@ edition = "2021"
 [dependencies]
 actix-web = "4.4"
 actix-files = "0.6"
-sqlx = { version = "0.7", features = ["sqlite", "runtime-async-std", "chrono"] }
+
 askama = { version = "0.12", features = ["with-actix-web"] }
 askama_actix = "0.14"
+
+env_logger = "0.10"
+log = "0.4"
+
+sqlx = { version = "0.7", features = ["sqlite", "runtime-async-std", "chrono"] }
 serde = { version = "1.0.190", features = ["derive"] }
 reqwest = "0.11"
 async-cron-scheduler = "1.0"
 chrono = "0.4"
 futures = "0.3"
-env_logger = "0.10"
-log = "0.4"
+

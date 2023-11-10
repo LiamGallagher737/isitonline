@@ -166,11 +166,14 @@ header .settings svg {
   border-width: 1px;
   border-color: #d1d5db;
   border-radius: 1.5rem;
+  min-width: 720px;
   padding: 0 1.5rem;
+  overflow-x: auto;
 }
 
 #monitors table {
   width: 100%;
+  table-layout: fixed;
 }
 
 #monitors thead {

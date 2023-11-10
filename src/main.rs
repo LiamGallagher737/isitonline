@@ -5,10 +5,10 @@ use actix_web::web::{Data, Form, Path};
 use actix_web::{delete, get, post, App, HttpServer};
 use askama::Template;
 use async_cron_scheduler::{Job, JobId, Scheduler};
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, Utc};
 use env_logger::Env;
 use futures::lock::Mutex;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
@@ -131,7 +131,7 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     };
 
     if insert_change {
-        println!(
+        warn!(
             "[CHANGE]: {:?} -> {:?} - {target}",
             last_change.map(|r| r.map(|r| r.http_code)),
             &http_code
