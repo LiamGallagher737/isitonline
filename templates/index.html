@@ -68,26 +68,29 @@
 <section id="monitors">
   <h2>Monitors</h2>
 
-  <table class="table-auto w-[700px] text-sm text-left text-gray-700">
-    <thead class="text-md text-gray-900 bg-gray-50">
-      <tr>
-        <th scope="col">Monitor</th>
-        <th scope="col">Status</th>
-        <th scope="col">Checked</th>
-        <th scope="col">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="monitors-table-body" hx-get="/monitors" hx-trigger="every 5s">
-      {% include "monitors.html" %}
-    </tbody>
-  </table>
-  
-  <form hx-post="/monitor" hx-target="#monitors-table-body" hx-swap="beforeend">
-    <input id="name" name="name" placeholder="Name" type="text" required />
-    <input id="target" name="target" placeholder="https://example.com" type="url" required />
-    <input id="cron" name="cron" placeholder="1/20 * * * * *" type="text" required />
-    <button type="submit">Submit</button>
-  </form>
+  <div class="monitors-outer">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Monitor</th>
+          <th scope="col">Status</th>
+          <th scope="col">Response Time</th>
+          <th scope="col">Checked</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="monitors-table-body" hx-get="/monitors" hx-trigger="every 5s">
+        {% include "monitors.html" %}
+      </tbody>
+    </table>
+
+    <form hx-post="/monitor" hx-target="#monitors-table-body" hx-swap="beforeend" class="add-monitor-form">
+      <input id="name" name="name" placeholder="Name" type="text" required />
+      <input id="target" name="target" placeholder="https://example.com" type="url" required />
+      <input id="cron" name="cron" placeholder="1/20 * * * * *" type="text" required />
+      <button type="submit">Add</button>
+    </form>
+  </div>
 </section>
 
 {% endblock %}

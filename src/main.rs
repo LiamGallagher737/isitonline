@@ -105,7 +105,9 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, pool: SqlitePool) {
+    let time = std::time::Instant::now();
     let res = http_client.get(&target).send().await;
+    let rtt = time.elapsed().as_millis() as i64;
     let success = match res.as_ref() {
         Ok(res) => !res.status().is_client_error() && !res.status().is_server_error(),
         Err(_) => false,
@@ -130,7 +132,7 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
 
     if insert_change {
         println!(
-            "{:?} -> {:?} - {target}",
+            "[CHANGE]: {:?} -> {:?} - {target}",
             last_change.map(|r| r.map(|r| r.http_code)),
             &http_code
         );
@@ -152,55 +154,35 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     }
 
     let insertion = sqlx::query!(
-        "INSERT INTO checks (success, monitor_id) VALUES (?, ?)",
-        success,
-        id,
+        "INSERT INTO response_times (time, monitor_id) VALUES (?, ?)",
+        rtt,
+        id
     )
     .execute(&pool)
     .await;
 
     if let Err(err) = insertion {
-        error!("Failed to insert check into database for {target}. Error: {err}");
+        error!("Failed to insert response time into database for {target}. Error: {err}");
     }
 }
 
 async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::Error> {
-    sqlx::query!(
-        r#"
-        SELECT
-            m.id,
-            m.name,
-            IFNULL((
-                SELECT success
-                FROM checks c
-                WHERE c.monitor_id = m.id
-                ORDER BY c.timestamp DESC
-                LIMIT 1
-            ), 2) "status: i64",
-            (
-                SELECT MAX(timestamp)
-                FROM checks c
-                WHERE c.monitor_id = m.id
-            ) "timestamp: NaiveDateTime"
-        FROM monitors m
-    "#
-    )
+    sqlx::query!("SELECT * FROM monitors_summary")
     .fetch_all(pool)
     .await
     .map(|rows| {
         rows.iter()
             .map(|row| MonitorTemplate {
-                id: row.id.unwrap(),
+                id: row.monitor_id,
                 name: row.name.clone(),
-                status: match row.status {
-                    Some(0) => Status::Offline,
-                    Some(1) => Status::Online,
-                    Some(2) => Status::Pending,
-                    _ => unreachable!(),
+                status: match row.success {
+                    Some(false) => Status::Offline,
+                    Some(true) => Status::Online,
+                    None => Status::Pending,
                 },
-                timestamp: row
-                    .timestamp
-                    .map(|timestamp| format_duration(Utc::now() - timestamp.and_utc())),
+                timestamp: Some(format_duration(Utc::now() - row.timestamp.and_utc())),
+                response_time: row.response_time,
+                http_code: row.http_code,
             })
             .collect()
     })
@@ -331,6 +313,8 @@ async fn monitor_post(
         name,
         status: Status::Pending,
         timestamp: None,
+        response_time: None,
+        http_code: None,
     })
 }
 
@@ -341,10 +325,12 @@ async fn monitor_delete(data: Data<AppData>, path: Path<i64>) -> Result<&'static
         r#"
         BEGIN TRANSACTION;
         DELETE FROM changes WHERE monitor_id = ?;
-        DELETE FROM checks WHERE monitor_id = ?;
+        DELETE FROM response_times WHERE monitor_id = ?;
+        DELETE FROM monitors_summary WHERE monitor_id = ?;
         DELETE FROM monitors WHERE id = ?;
         COMMIT;
     "#,
+        id,
         id,
         id,
         id,
@@ -391,6 +377,8 @@ struct MonitorTemplate {
     name: String,
     status: Status,
     timestamp: Option<String>,
+    response_time: Option<i64>,
+    http_code: Option<i64>,
 }
 
 #[derive(Template)]

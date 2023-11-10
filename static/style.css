@@ -101,23 +101,23 @@ header .settings svg {
 }
 
 .start-card-red {
-  --_secondary-color: #fecaca;
   --_primary-color: #ef4444;
+  --_secondary-color: #fecaca;
 }
 
 .start-card-orange {
-  --_secondary-color: #fed7aa;
   --_primary-color: #f97316;
+  --_secondary-color: #fed7aa;
 }
 
 .start-card-green {
-  --_secondary-color: #bbf7d0;
   --_primary-color: #22c55e;
+  --_secondary-color: #bbf7d0;
 }
 
 .start-card-blue {
-  --_secondary-color: #bfdbfe;
   --_primary-color: #3b82f6;
+  --_secondary-color: #bfdbfe;
 }
 
 /* Issues */
@@ -161,12 +161,15 @@ header .settings svg {
 
 /* Monitors */
 
-#monitors table {
+.monitors-outer {
   border-style: solid;
   border-width: 1px;
   border-color: #d1d5db;
   border-radius: 1.5rem;
   padding: 0 1.5rem;
+}
+
+#monitors table {
   width: 100%;
 }
 
@@ -192,9 +195,12 @@ header .settings svg {
   line-height: 4rem;
 }
 
-#monitors tbody tr:last-child th,
-#monitors tbody tr:last-child td {
-  border: 0;
+.add-monitor-form {
+  height: 4rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
 }
 
 /* Reuseable */
@@ -211,6 +217,10 @@ header .settings svg {
 
 .http-code-red {
   --_bg-color: #eb5757;
+}
+
+.http-code-orange {
+  --_bg-color: #f97316;
 }
 
 .http-code-green {
