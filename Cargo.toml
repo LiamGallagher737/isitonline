@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 actix-web = "4.4"
 actix-files = "0.6"
+actix-web-lab = "0.20"
 
 askama = { version = "0.12", features = ["with-actix-web"] }
 askama_actix = "0.14"
@@ -21,4 +22,5 @@ reqwest = "0.11"
 async-cron-scheduler = "1.0"
 chrono = "0.4"
 futures = "0.3"
-
+tokio-stream = "0.1"
+tokio = { version = "1.34", features = ["sync"] }

@@ -1,11 +1,14 @@
 use actix_files::Files;
 use actix_web::error::{Error, ErrorInternalServerError};
 use actix_web::middleware::{Compress, Logger};
+use actix_web::rt::time::interval;
 use actix_web::web::{Data, Form, Path};
 use actix_web::{delete, get, post, App, HttpServer};
+use actix_web_lab::sse::{self, Sse};
+use actix_web_lab::util::InfallibleStream;
 use askama::Template;
 use async_cron_scheduler::{Job, JobId, Scheduler};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use env_logger::Env;
 use futures::lock::Mutex;
 use log::{error, info, warn};
@@ -14,6 +17,9 @@ use sqlx::SqlitePool;
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Clone)]
 struct AppData {
@@ -21,6 +27,7 @@ struct AppData {
     scheduler: Arc<Mutex<Scheduler<chrono::Local>>>,
     http_client: reqwest::Client,
     job_ids: Arc<Mutex<BTreeMap<i64, JobId>>>,
+    mub: Arc<MonitorUpdatesBroadcaster>,
 }
 
 #[actix_web::main]
@@ -46,6 +53,8 @@ async fn main() -> std::io::Result<()> {
         8080
     };
 
+    let mub = MonitorUpdatesBroadcaster::create();
+
     info!("Setting up schedule");
     let (mut scheduler, sched_service) =
         Scheduler::<chrono::Local>::launch(actix_web::rt::time::sleep);
@@ -65,6 +74,7 @@ async fn main() -> std::io::Result<()> {
     for monitor in monitors {
         let http_client = http_client.clone();
         let pool = pool.clone();
+        let mub = Arc::clone(&mub);
         let job_id = scheduler.insert(Job::cron(&monitor.cron).unwrap(), move |_| {
             // info!("Checking {} at {}", monitor.name, monitor.target);
             actix_web::rt::spawn(update_monitor(
@@ -72,6 +82,7 @@ async fn main() -> std::io::Result<()> {
                 monitor.target.clone(),
                 http_client.clone(),
                 pool.clone(),
+                mub.clone(),
             ));
         });
         job_ids.insert(monitor.id, job_id);
@@ -84,6 +95,7 @@ async fn main() -> std::io::Result<()> {
         scheduler: Arc::new(Mutex::new(scheduler)),
         http_client,
         job_ids: Arc::new(Mutex::new(job_ids)),
+        mub: Arc::clone(&mub),
     };
 
     let server = HttpServer::new(move || {
@@ -92,6 +104,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Compress::default())
             .app_data(Data::new(app_data.clone()))
             .service(index)
+            .service(monitor_updates_sse_get)
             .service(monitors_get)
             .service(monitor_post)
             .service(monitor_delete)
@@ -104,7 +117,13 @@ async fn main() -> std::io::Result<()> {
     server_res
 }
 
-async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, pool: SqlitePool) {
+async fn update_monitor(
+    id: i64,
+    target: String,
+    http_client: reqwest::Client,
+    pool: SqlitePool,
+    mub: Arc<MonitorUpdatesBroadcaster>,
+) {
     let time = std::time::Instant::now();
     let res = http_client.get(&target).send().await;
     let rtt = time.elapsed().as_millis() as i64;
@@ -164,31 +183,55 @@ async fn update_monitor(id: i64, target: String, http_client: reqwest::Client, p
     if let Err(err) = insertion {
         error!("Failed to insert response time into database for {target}. Error: {err}");
     }
+
+    let clients = mub.inner.lock().await.clients.clone();
+    let send_futures = clients.iter().map(|client| {
+        client.send(sse::Event::Data(
+            sse::Data::new(
+                MonitorTemplate {
+                    id,
+                    name: "Monitor".into(),
+                    status: if success {
+                        Status::Online
+                    } else {
+                        Status::Offline
+                    },
+                    timestamp: Some(String::from("Just Now")),
+                    response_time: Some(rtt),
+                    http_code,
+                }
+                .render()
+                .unwrap(),
+            )
+            .event(format!("monitor-{id}")),
+        ))
+    });
+    let _ = futures::future::join_all(send_futures).await;
 }
 
 async fn get_monitors(pool: &SqlitePool) -> Result<Vec<MonitorTemplate>, sqlx::Error> {
     sqlx::query!("SELECT * FROM monitors_summary")
-    .fetch_all(pool)
-    .await
-    .map(|rows| {
-        rows.iter()
-            .map(|row| MonitorTemplate {
-                id: row.monitor_id,
-                name: row.name.clone(),
-                status: match row.success {
-                    Some(false) => Status::Offline,
-                    Some(true) => Status::Online,
-                    None => Status::Pending,
-                },
-                timestamp: Some(format_duration(Utc::now() - row.timestamp.and_utc())),
-                response_time: row.response_time,
-                http_code: row.http_code,
-            })
-            .collect()
-    })
+        .fetch_all(pool)
+        .await
+        .map(|rows| {
+            rows.iter()
+                .map(|row| MonitorTemplate {
+                    id: row.monitor_id,
+                    name: row.name.clone(),
+                    status: match row.success {
+                        Some(false) => Status::Offline,
+                        Some(true) => Status::Online,
+                        None => Status::Pending,
+                    },
+                    timestamp: Some(format_duration(Utc::now() - row.timestamp.and_utc())),
+                    response_time: row.response_time,
+                    http_code: row.http_code,
+                })
+                .collect()
+        })
 }
 
-fn format_duration(duration: Duration) -> String {
+fn format_duration(duration: chrono::Duration) -> String {
     if duration.num_seconds() == 0 {
         String::from("Just now")
     } else if duration.num_seconds() == 1 {
@@ -260,6 +303,13 @@ async fn index(data: Data<AppData>) -> Result<IndexTemplate, Error> {
     })
 }
 
+#[get("/monitor-updates")]
+async fn monitor_updates_sse_get(
+    data: Data<AppData>,
+) -> Sse<InfallibleStream<ReceiverStream<sse::Event>>> {
+    data.mub.new_client().await
+}
+
 #[get("/monitors")]
 async fn monitors_get(data: Data<AppData>) -> Result<MonitorsTemplate, Error> {
     let monitors = get_monitors(&data.pool)
@@ -293,6 +343,7 @@ async fn monitor_post(
     let name = params.name.clone();
     let http_client = data.http_client.clone();
     let pool = data.pool.clone();
+    let mub = Arc::clone(&data.mub);
     let job_id = data
         .scheduler
         .lock()
@@ -304,6 +355,7 @@ async fn monitor_post(
                 params.target.clone(),
                 http_client.clone(),
                 pool.clone(),
+                mub.clone(),
             ));
         });
     data.job_ids.lock().await.insert(row.id, job_id);
@@ -316,6 +368,26 @@ async fn monitor_post(
         response_time: None,
         http_code: None,
     })
+}
+
+async fn monitor_get(data: Data<AppData>, path: Path<i64>) -> Result<MonitorTemplate, Error> {
+    let id = path.into_inner();
+    sqlx::query!("SELECT * FROM monitors_summary WHERE monitor_id = ?", id)
+        .fetch_one(&data.pool)
+        .await
+        .map(|row| MonitorTemplate {
+            id: row.monitor_id,
+            name: row.name.clone(),
+            status: match row.success {
+                Some(false) => Status::Offline,
+                Some(true) => Status::Online,
+                None => Status::Pending,
+            },
+            timestamp: Some(format_duration(Utc::now() - row.timestamp.and_utc())),
+            response_time: row.response_time,
+            http_code: row.http_code,
+        })
+        .map_err(ErrorInternalServerError)
 }
 
 #[delete("/monitor/{id}")]
@@ -396,4 +468,80 @@ enum Status {
     Offline,
     Online,
     Pending,
+}
+
+pub struct MonitorUpdatesBroadcaster {
+    inner: Mutex<MonitorUpdatesBroadcasterInner>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct MonitorUpdatesBroadcasterInner {
+    clients: Vec<mpsc::Sender<sse::Event>>,
+}
+
+impl MonitorUpdatesBroadcaster {
+    /// Constructs new broadcaster and spawns ping loop.
+    pub fn create() -> Arc<Self> {
+        let this = Arc::new(MonitorUpdatesBroadcaster {
+            inner: Mutex::new(MonitorUpdatesBroadcasterInner::default()),
+        });
+        MonitorUpdatesBroadcaster::spawn_ping(Arc::clone(&this));
+        this
+    }
+
+    /// Pings clients every 10 seconds to see if they are alive and remove them from the broadcast
+    /// list if not.
+    fn spawn_ping(this: Arc<Self>) {
+        actix_web::rt::spawn(async move {
+            let mut interval = interval(Duration::from_secs(10));
+
+            loop {
+                interval.tick().await;
+                this.remove_stale_clients().await;
+            }
+        });
+    }
+
+    /// Removes all non-responsive clients from broadcast list.
+    async fn remove_stale_clients(&self) {
+        let clients = self.inner.lock().await.clients.clone();
+
+        let mut ok_clients = Vec::new();
+
+        for client in clients {
+            if client
+                .send(sse::Event::Comment("ping".into()))
+                .await
+                .is_ok()
+            {
+                ok_clients.push(client.clone());
+            } else {
+                warn!("Removing client");
+            }
+        }
+
+        self.inner.lock().await.clients = ok_clients;
+    }
+
+    /// Registers client with broadcaster, returning an SSE response body.
+    pub async fn new_client(&self) -> Sse<InfallibleStream<ReceiverStream<sse::Event>>> {
+        let (tx, rx) = mpsc::channel(10);
+
+        tx.send(sse::Data::new("connected").into()).await.unwrap();
+
+        self.inner.lock().await.clients.push(tx);
+
+        Sse::from_infallible_receiver(rx)
+    }
+
+    /// Broadcasts `msg` to all clients.
+    pub async fn broadcast(&self, msg: &str) {
+        let clients = self.inner.lock().await.clients.clone();
+
+        let send_futures = clients
+            .iter()
+            .map(|client| client.send(sse::Data::new(msg).into()));
+
+        let _ = futures::future::join_all(send_futures).await;
+    }
 }

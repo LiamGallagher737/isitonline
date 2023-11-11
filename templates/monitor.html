@@ -1,4 +1,4 @@
-<tr id="monitor-{{ id }}" class="bg-white border-b">
+<tr id="monitor-{{ id }}" sse-swap="monitor-{{ id }}" hx-swap="outerHTML">
   <th scope="row" class="monitor-name">{{ name }}</th>
   <td class="monitor-status">
     {% match status %}

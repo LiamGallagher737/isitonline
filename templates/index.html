@@ -79,7 +79,7 @@
           <th scope="col">Actions</th>
         </tr>
       </thead>
-      <tbody id="monitors-table-body" hx-get="/monitors" hx-trigger="every 5s">
+      <tbody id="monitors-table-body" hx-ext="sse" sse-connect="/monitor-updates">
         {% include "monitors.html" %}
       </tbody>
     </table>
