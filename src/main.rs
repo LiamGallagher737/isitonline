@@ -79,6 +79,7 @@ async fn main() -> std::io::Result<()> {
             // info!("Checking {} at {}", monitor.name, monitor.target);
             actix_web::rt::spawn(update_monitor(
                 monitor.id,
+                monitor.name.clone(),
                 monitor.target.clone(),
                 http_client.clone(),
                 pool.clone(),
@@ -119,6 +120,7 @@ async fn main() -> std::io::Result<()> {
 
 async fn update_monitor(
     id: i64,
+    name: String,
     target: String,
     http_client: reqwest::Client,
     pool: SqlitePool,
@@ -190,7 +192,7 @@ async fn update_monitor(
             sse::Data::new(
                 MonitorTemplate {
                     id,
-                    name: "Monitor".into(),
+                    name: name.clone(),
                     status: if success {
                         Status::Online
                     } else {
@@ -329,7 +331,7 @@ struct MonitorPostParams {
 async fn monitor_post(
     data: Data<AppData>,
     params: Form<MonitorPostParams>,
-) -> Result<MonitorTemplate, Error> {
+) -> Result<MonitorsTemplate, Error> {
     let row = sqlx::query!(
         "INSERT INTO monitors (name, target, cron) VALUES(?, ?, ?) RETURNING id",
         params.name,
@@ -352,6 +354,7 @@ async fn monitor_post(
             // info!("Checking {} at {}", params.name, params.target);
             actix_web::rt::spawn(update_monitor(
                 row.id,
+                params.name.clone(),
                 params.target.clone(),
                 http_client.clone(),
                 pool.clone(),
@@ -360,34 +363,16 @@ async fn monitor_post(
         });
     data.job_ids.lock().await.insert(row.id, job_id);
 
-    Ok(MonitorTemplate {
-        id: row.id,
-        name,
-        status: Status::Pending,
-        timestamp: None,
-        response_time: None,
-        http_code: None,
+    Ok(MonitorsTemplate {
+        monitors: vec![MonitorTemplate {
+            id: row.id,
+            name,
+            status: Status::Pending,
+            timestamp: None,
+            response_time: None,
+            http_code: None,
+        }],
     })
-}
-
-async fn monitor_get(data: Data<AppData>, path: Path<i64>) -> Result<MonitorTemplate, Error> {
-    let id = path.into_inner();
-    sqlx::query!("SELECT * FROM monitors_summary WHERE monitor_id = ?", id)
-        .fetch_one(&data.pool)
-        .await
-        .map(|row| MonitorTemplate {
-            id: row.monitor_id,
-            name: row.name.clone(),
-            status: match row.success {
-                Some(false) => Status::Offline,
-                Some(true) => Status::Online,
-                None => Status::Pending,
-            },
-            timestamp: Some(format_duration(Utc::now() - row.timestamp.and_utc())),
-            response_time: row.response_time,
-            http_code: row.http_code,
-        })
-        .map_err(ErrorInternalServerError)
 }
 
 #[delete("/monitor/{id}")]
@@ -509,14 +494,11 @@ impl MonitorUpdatesBroadcaster {
         let mut ok_clients = Vec::new();
 
         for client in clients {
-            if client
-                .send(sse::Event::Comment("ping".into()))
-                .await
-                .is_ok()
-            {
+            let send = &client.send(sse::Event::Comment("ping".into())).await;
+            if send.is_ok() {
                 ok_clients.push(client.clone());
             } else {
-                warn!("Removing client");
+                warn!("Removing client: {:#?}", send.as_ref().unwrap_err());
             }
         }
 

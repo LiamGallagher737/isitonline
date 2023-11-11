@@ -1,29 +1,27 @@
-<tr id="monitor-{{ id }}" sse-swap="monitor-{{ id }}" hx-swap="outerHTML">
-  <th scope="row" class="monitor-name">{{ name }}</th>
-  <td class="monitor-status">
-    {% match status %}
-      {% when Status::Online %} Online
-      {% when Status::Offline %} Offline
-      {% when Status::Pending %} Pending
-    {% endmatch %}
-    {% match http_code %}
-      {% when Some with (code) %} ({{ code }})
-      {% when None %}
-    {% endmatch %}
-  </td>
-  <td class="monitor-rt">
-    {% match response_time %}
-      {% when Some with (val) %} {{ val }}ms
-      {% when None %} n/a
-    {% endmatch %}
-  </td>
-  <td class="monitor-last-check">
-    {% match timestamp %}
-      {% when Some with (val) %} {{ val }}
-      {% when None %} Not checked yet
-    {% endmatch %}
-  </td>
-  <td class="monitor-actions">
-    <button hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
-  </td>
-</tr>
+<th scope="row" class="monitor-name">{{ name }}</th>
+<td class="monitor-status">
+  {% match status %}
+    {% when Status::Online %} Online
+    {% when Status::Offline %} Offline
+    {% when Status::Pending %} Pending
+  {% endmatch %}
+  {% match http_code %}
+    {% when Some with (code) %} ({{ code }})
+    {% when None %}
+  {% endmatch %}
+</td>
+<td class="monitor-rt">
+  {% match response_time %}
+    {% when Some with (val) %} {{ val }}ms
+    {% when None %} n/a
+  {% endmatch %}
+</td>
+<td class="monitor-last-check">
+  {% match timestamp %}
+    {% when Some with (val) %} {{ val }}
+    {% when None %} Not checked yet
+  {% endmatch %}
+</td>
+<td class="monitor-actions">
+  <button hx-delete="/monitor/{{ id }}" hx-trigger="click" hx-target="#monitor-{{ id }}" hx-swap="delete">X</button>
+</td>

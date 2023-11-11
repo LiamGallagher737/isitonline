@@ -1,3 +1,5 @@
 {% for MonitorTemplate { id, name, status, response_time, http_code, timestamp } in monitors %}
-  {% include "monitor.html" %}
+  <tr id="monitor-{{ id }}" sse-swap="monitor-{{ id }}">
+    {% include "monitor.html" %}
+  </tr>
 {% endfor %}
